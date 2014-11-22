@@ -236,3 +236,116 @@ fmt.Println("value is %7.1e\n, v.Interface())
 同样的，这里没有必要对v.Interface()的结果做类型是float64的类型断言；空接口的值里面保存着值的类型信息，Printf可以对其进行恢复。
 
 再次重申：反射从反射的值到反射的对象，并且可以从反射对象到反射的值。
+
+3. 反射的第三法则 - 要修改反射对象，其值必须是可以设置的
+----------------------------------------
+
+第三条法则是最难以理解和困惑的，但是如果我们回到第一条法则就会变得容易的多。
+
+这里是一些不能运行的代码，但是值得拿来探讨下：
+
+```
+var x float64 = 3.4
+v := refelct.ValueOf(x)
+v.SetFloat(7.1) // 错误，会panic
+```
+
+如果你运行这段代码，程序会panic并带着如下错误信息：
+
+```
+panic: reflect.Value.SetFloat using unaddressable value
+```
+问题不在于值7.1不可寻址，而是v不可设值。设值性是一个反射Value的属性，并不是所有的反射Value都有这个属性。
+
+Value的CanSet方法能返回一个Value的设值性；在我们这个例子中：
+
+```
+var x float64 = 3.4
+v := reflect.ValueOf(x)
+fmt.Println("settability of v:", v.CanSet())
+```
+
+输出：
+
+```
+settability of v: false
+```
+
+在一个不可设置的Value上调用Set方法是会报错的。但是什么是设值性？
+
+设值性有一点像可寻址性，但是更加的严格。他是反射对象的一种属性，表示可以修改用来创建反射对象的实际存储。设置性由是否反射对象保存在原始对象。
+
+当我们说：
+
+```
+var x float64 = 3.4
+v := reflect.ValueOf(x)
+```
+
+我们传递了一个xd的拷贝到reflect.ValueOf，因此作为reflect.ValueOf的参数创建的反射值，是一个x的拷贝值而不是x自身，因而，在语句中：
+
+```
+v.SetFloat(7.1)
+```
+
+如果这条语句能成功执行，其不会更新x，即使v看起来像其从x中创建的。相反，其会更新在反射值里x的一个拷贝而不是x自身不会受到影响。这样会招来更多的疑惑，也没有什么实际意义。因此这是非法的，而设置性是一个属性用来规避这个问题。
+
+如果这看起来有点过了，其实不是。这是一种熟悉的情形。想象一下将x传递给一个函数：
+
+```
+f(x)
+```
+
+我们不会期待f真的能修改x的值因为我们传递的时x值的一个拷贝，而不是x本身。如果我们想f能修改直接修改x我们必须传递x一个地址，即指向x的指针：
+
+```
+f(&x)
+```
+
+这听起来十分容易理解和熟悉，反射跟这是一个原理。如果我们想通过反射改变x的值，我们必须给反射一个我们想修改值的指针。
+
+让我们试试，首先我们照常初始化x并且创建一个指向其的反射值，让我们称为p。
+
+```
+var x float64 = 3.4
+p := reflect.ValueOf(&x) // Note: take the address of x.
+fmt.Println("type of p:", p.Type())
+fmt.Println("settability of p:", p.CanSet())
+```
+
+现在的输出是：
+
+```
+type of p: *float64
+settablity of p: false
+```
+
+反射对象不可设值，但是我们不是想设置p的值，而是*p。需要得到p指向的对象，我们调用Value上的Elem方法，其通过指针间接取值，并且将结果保存进一个反射Value，姑且称为v。
+
+```
+v := p.Elem()
+fmt.Println("settability of v:", v.CanSet())
+```
+
+现在v是一个可设值的的对象，正如结果显示的一样：
+
+```
+settability of v: true
+```
+
+并且，由于其代表x，我们终于能通过v.SetFloat来改变x的值：
+
+```
+v.SetFloat(7.1)
+fmt.Println(v.Interface())
+fmt.Println(x)
+```
+
+其输出正如期待的一样，是：
+
+```
+7.1
+7.1
+```
+
+反射可能会很难理解，但是其做的事情跟语言做的事情一样，除了通过反射Types和Values能掩盖下面发生的事情。只需要记住，反射的Value需要某事物的地址，才能够修改其代表的值。
