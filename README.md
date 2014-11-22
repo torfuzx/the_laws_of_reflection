@@ -105,3 +105,90 @@ empty = w
 一个重要的细节是一个接口里面的的对的形式是（值，具体的类型）而不是（值，接口的类型）。接口不保存接口的值。
 
 现在我们可以开始讲反射了。
+
+1. 反射的第一条定律 - 反射从接口的值到反射的对象
+----------------------------------------
+在最基本的层面，反射只是一个检查一个保存在接口变量中（类型，值）对的机制。首先，我们需要知道reflect包中的两个类型：Type和Value。这两个类型能让我们访问一个接口变量里面的内容。我们可以使用两个方法，reflect.TypeOf和reflect.ValueOf来获取一个接口变量中relefct.Type和reflect.Value的那一部分。（同时我们也能很容易的从reflect.Value中获取reflect.Type，但是让我们暂时Value和Type的概念分开。）
+
+让我们从TypeOf开始：
+
+```
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+func main() {
+    var x float64 = 3.4
+    fmt.Println("type:", reflect.TypeOf(x))
+}
+```
+
+这个程序会输出：
+
+```
+type: float64
+```
+
+你可能会想这里的接口在那里。因为这个程序看上去像是在传递一个float64的变量x，而不是在一个接口的值到reflect.TypeOf方法。但是接口是存在的，如godoc中显示的，reflect.TypeOf的方法签名包含一个空的接口：
+
+```
+// TypeOf返回保存在接口interface{}中的值的类型
+func TypeOf(i interface{}) Type
+```
+
+当我们调用reflect.TypeOf(x)的时候，x首先会被保存到一个空的接口口里面然后作为参数传递。reflect.TypeOf会解包该空接口信息并还原其类型信息。
+
+reflect.ValueOf的方法当然能恢复接口中的值。
+
+```
+var x  float64 = 3.4
+fmt.Println("value:", reflect.ValueOf(x))
+```
+
+会输出：
+
+```
+value: <float64 Value>
+```
+
+reflect.Type和reflect.Value都有很多方法让我们检查和操作他们。一个重要的例子就是Value有一个Type的方法可以返回一个reflect.Value的Type。另外一个是Type和Value都有一个Kind方法可以返回一个常量来表明保存的哪一种值：Uint，Float64，Slice等等。同时Value上的一些诸如Int和Float的方法可以让我们（以int64和float6）来获取保存在接口内部的值。
+
+```
+var x float64 = 3.4
+v := reflect.ValueOf(x)
+fmt.Println("type:", v.Type())
+fmt.Println("kind is float64:", v.Kind() == reflect.Float64)
+fmt.Println("value:", v.Float())
+```
+
+会输出：
+
+```
+type: float64
+kind is float64: true
+value: 3.4
+```
+
+同时也有一些诸如SetInt和SetFloat的方法，但是为了方便使用他们我需要了解可设置性（settability）,是下边要讨论的第三个法则。
+
+reflection库中有一些属性值得单独拿出来讲。首先，为了保持API的简洁，Value的“getter”和“setter”方法操作于能保存值的最大类型：例如int64代表所有有符号型的整型。即，Value的Int方法返回一个int64，SetInt接收一个int64的参数。使用这些方法的时候可能需要做类型的变换。
+
+```
+var x uint8 = 'x'
+v := reflect.ValueOf(x)
+fmt.Println("type:", v.Type())                            // uint8.
+fmt.Println("kind is uint8: ", v.Kind() == reflect.Uint8) // true.
+x = uint8(v.Uint())
+```
+第二个特性是一个反射对象的Kind描述的时底层类型，而不是静态类型。如果一个反射对象包含一个用户定义的的整形类型，如在
+
+```
+type MyInt int
+var x Myint = 7
+v := reflect.ValueOf(x)
+```
+
+v的Kind仍然是reflect.Int，即使v的静态类型是MyInt而不是int。换句话说，Kind不能将一个int和MyInt区分开来，但是Type可以。
