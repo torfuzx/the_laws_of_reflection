@@ -192,3 +192,47 @@ v := reflect.ValueOf(x)
 ```
 
 v的Kind仍然是reflect.Int，即使v的静态类型是MyInt而不是int。换句话说，Kind不能将一个int和MyInt区分开来，但是Type可以。
+
+
+2. 反射的第二条法则 - 反射从反射对象到反射的值
+----------------------------------------
+
+和物理反射一样，Go中的反射会生成其自身的对立面。
+
+拿到一个reflect.Value我们通过使用Interface方法可以恢复接口的值；该方法的实际效果是将类型和值的信息打包回接口的表现的形式并且返回结果：
+
+```
+// Interface以interface{}的形式返回v的值
+func (v Value) Interface() interface{}
+```
+
+结果我们可以用：
+
+```
+y := v.Interface().(float64) // y将会拥有类型float64
+fmt.Println(y)
+```
+
+来打印出反射对象v代表的float64值
+
+然而，我们还可以更进一步。fmt.Println，fmt.Printf等等的参数都是以空接口值的形式传递的，然后种子fmt宝的内部对传入的值进行解包，正如我们在之前的例子中看到的一样。因此为了打印relect.Value的内容，需要传递Interface方法的结果到打印方法：
+
+```
+fmt.Println(v.Interface())
+```
+
+（为什么不是fmt.Println(v)? 因为v是一个reflect.Value；我们需要其保存的具体的值）因为我们的值是一个float64，我们甚至可以使用一个浮点数的格式：
+
+```
+fmt.Println("value is %7.1e\n, v.Interface())
+```
+
+并且得到如下的结果：
+
+```
+3.4e+000
+```
+
+同样的，这里没有必要对v.Interface()的结果做类型是float64的类型断言；空接口的值里面保存着值的类型信息，Printf可以对其进行恢复。
+
+再次重申：反射从反射的值到反射的对象，并且可以从反射对象到反射的值。
